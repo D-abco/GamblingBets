@@ -1,0 +1,24 @@
+{
+    "name": "GamblingBets",
+    "version_number": "1.0.0",
+    "website_url": "https://github.com/yourusername/GamblingBets",
+    "description": "Add casino-style betting to Balatro! Wager money on predicting your next poker hand with dynamic payouts and risk/reward gameplay.",
+    "dependencies": [
+        "Steamodded-1.0.0"
+    ],
+    "author": "d_abco",
+    "license": "MIT",
+    "tags": [
+        "gameplay",
+        "shop",
+        "betting",
+        "casino",
+        "economy"
+    ],
+    "balatro_version": "1.0.1o",
+    "steamodded_version": "1.0.0-beta",
+    "compatibility": {
+        "min_balatro": "1.0.1o",
+        "min_steamodded": "1.0.0-beta-0509c"
+    }
+}
