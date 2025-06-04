@@ -1,6 +1,6 @@
 --- STEAMODDED HEADER
---- MOD_NAME: GamblingBets
---- MOD_ID: GamblingBets
+--- MOD_NAME: DGamblingBetsDEV
+--- MOD_ID: DGamblingBetsDEV
 --- MOD_AUTHOR: [d_abco]
 --- MOD_DESCRIPTION: Bet any amount of your money on your next hand in the shop.
 --- STEAMODDED HEADER
@@ -190,7 +190,6 @@ function payoutBet(maxAmount)
   
   local payout = G.WIN_AMT_EARNINGS + G.BET_SIZE
   
-  -- Use ease_dollars for smooth money transition
   ease_dollars(payout)
   
   play_sound('chips1')
@@ -378,7 +377,6 @@ function G.FUNCS.CANCEL_BET()
     return
   end
   
-  -- Use ease_dollars for smooth money transition
   ease_dollars(G.BET_SIZE)
   
   play_sound('coin2')
@@ -407,7 +405,6 @@ function G.FUNCS.PLACE_BET()
   if G.GAME and G.GAME.dollars >= 5 and G.BET_SIZE_UI >= 5 then
     G.BET_SIZE = G.BET_SIZE_UI
     
-    -- Use ease_dollars for smooth money transition
     ease_dollars(-G.BET_SIZE_UI)
 
     play_sound('coin1')
@@ -607,12 +604,9 @@ function G.UIDEF.shop()
     ["Straight Flush"] = 1.0   -- 1:5 ratio (best odds)
   }
 
-
-  local selected_hand = G.GAME.current_option.option_text
-  G.GAME.current_option3 = {option_text3 = hand_ratios[selected_hand] or 2.5}
-
   local all_hands = {"Two Pair", "Three of a Kind", "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush"}
 
+  -- Initialize/reset shop hands if needed
   if not G.CURRENT_SHOP_HANDS or not G.SHOP_HANDS_SET then
     math.randomseed(G.GAME.round * 1000 + G.GAME.round_resets.ante * 100)
     
@@ -647,8 +641,16 @@ function G.UIDEF.shop()
   end
 
   G.GAME.option_list = G.CURRENT_SHOP_HANDS
-  G.GAME.current_option_index = 1
-  G.GAME.current_option = {option_text = G.GAME.option_list[G.GAME.current_option_index]}
+  G.GAME.current_option_index = G.GAME.current_option_index or 1
+  
+  if not G.GAME.current_option or not G.GAME.current_option.option_text then
+    G.GAME.current_option = {option_text = G.GAME.option_list[G.GAME.current_option_index]}
+  end
+
+  local selected_hand = G.GAME.current_option.option_text
+  if not G.GAME.current_option3 or not G.GAME.current_option3.option_text3 then
+    G.GAME.current_option3 = {option_text3 = hand_ratios[selected_hand] or 2.5}
+  end
 
   local max_payouts = {
     ["Two Pair"] = 25,
@@ -660,7 +662,6 @@ function G.UIDEF.shop()
     ["Straight Flush"] = 100
   }
 
-  local selected_hand = G.GAME.current_option.option_text
   local max_payout = max_payouts[selected_hand] or 25
 
   G.WIN_AMT_EARNINGS_UI = math.ceil(G.BET_SIZE_UI / G.GAME.current_option3.option_text3)
@@ -676,8 +677,10 @@ function G.UIDEF.shop()
     G.GAME.option_list2[i] = string.format("Payout: $%d | $%d Max", G.WIN_AMT_EARNINGS_UI, hand_max)
   end
   
-  G.GAME.current_option_index2 = 1
-  G.GAME.current_option2 = {option_text2 = G.GAME.option_list2[G.GAME.current_option_index2]}
+  G.GAME.current_option_index2 = G.GAME.current_option_index2 or 1
+  if not G.GAME.current_option2 or not G.GAME.current_option2.option_text2 then
+    G.GAME.current_option2 = {option_text2 = G.GAME.option_list2[G.GAME.current_option_index2]}
+  end
 
   local t = {
     n=G.UIT.ROOT, config = {align = 'cl', colour = G.C.CLEAR}, 
