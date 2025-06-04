@@ -185,15 +185,25 @@ end
 -- HAND DETECTION AND PAYOUT LOGIC
 
 function payoutBet(maxAmount)
-  G.WIN_AMT_EARNINGS = math.ceil(G.BET_SIZE / G.GAME.current_option3.option_text3)
+  local hand_ratios = {
+    ["Two Pair"] = 2.5,
+    ["Three of a Kind"] = 2.0,
+    ["Straight"] = 1.8,
+    ["Flush"] = 1.5,
+    ["Full House"] = 1.3,
+    ["Four of a Kind"] = 1.1,
+    ["Straight Flush"] = 1.0
+  }
+  
+  local ratio = hand_ratios[G.HAND_BET_SELECTED] or 2.5
+  G.WIN_AMT_EARNINGS = math.ceil(G.BET_SIZE / ratio)
+  
   if G.WIN_AMT_EARNINGS > maxAmount then
     G.WIN_AMT_EARNINGS = maxAmount
   end
   
   local payout = G.WIN_AMT_EARNINGS + G.BET_SIZE
-  
   ease_dollars(payout)
-  
   play_sound('chips1')
   play_sound('coin1')
   
@@ -317,9 +327,11 @@ G.FUNCS.toggle_shop = function(e)
   
   if G.STATE == G.STATES.SHOP then
     G.BET_ALREADY_PLACED = false
+    -- Always reset shop hands when entering shop
     G.SHOP_HANDS_SET = false
     G.CURRENT_SHOP_HANDS = nil
     
+    -- Reset UI state as well
     G.GAME.current_option_index = nil
     G.GAME.current_option = nil
     G.GAME.current_option2 = nil
@@ -327,6 +339,7 @@ G.FUNCS.toggle_shop = function(e)
     G.GAME.option_list = nil
     G.GAME.option_list2 = nil
     
+    -- Reset any expired bets
     if G.PAYOUT_CASH and G.SAVED_BLIND < G.GAME.round then
       G.PAYOUT_CASH = false
       G.BET_SIZE = 0
@@ -419,7 +432,7 @@ function G.FUNCS.PLACE_BET()
     play_sound('coin1')
     
     G.HAND_BET_SELECTED = G.GAME.current_option.option_text
-    G.LAST_BET_HAND = G.HAND_BET_SELECTED  
+    G.LAST_BET_HAND = G.HAND_BET_SELECTED  -- Track the last bet hand
     G.SAVED_BLIND = G.GAME.round
     G.PAYOUT_CASH = true
     initializeBetFlameDisplay()
@@ -469,13 +482,17 @@ function G.FUNCS.NEXT_OPTION()
   G.GAME.current_option_index = (G.GAME.current_option_index % #G.GAME.option_list) + 1
   G.GAME.current_option.option_text = G.GAME.option_list[G.GAME.current_option_index]
   
-  -- Set ratio based on selected hand
+  -- Set ratio based on selected hand - only if current_option3 exists
   local selected_hand = G.GAME.current_option.option_text
-  G.GAME.current_option3.option_text3 = hand_ratios[selected_hand] or 2.5
+  if G.GAME.current_option3 then
+    G.GAME.current_option3.option_text3 = hand_ratios[selected_hand] or 2.5
+  end
   
   -- Calculate payout with hand-specific ratio and max
   local max_payout = max_payouts[selected_hand] or 25
-  G.WIN_AMT_EARNINGS_UI = math.ceil(G.BET_SIZE_UI / G.GAME.current_option3.option_text3)
+  local ratio = hand_ratios[selected_hand] or 2.5
+
+  G.WIN_AMT_EARNINGS_UI = math.ceil(G.BET_SIZE_UI / ratio)
   if G.WIN_AMT_EARNINGS_UI > max_payout then
     G.WIN_AMT_EARNINGS_UI = max_payout
   end
@@ -619,16 +636,19 @@ function G.UIDEF.shop()
 
   local all_hands = {"Two Pair", "Three of a Kind", "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush"}
 
+  -- Initialize/reset shop hands if needed
   if not G.CURRENT_SHOP_HANDS or not G.SHOP_HANDS_SET then
     math.randomseed(G.GAME.round * 1000 + G.GAME.round_resets.ante * 100)
     
     G.CURRENT_SHOP_HANDS = {}
     local available_hands = {}
     
+    -- Copy all hands to available list
     for i, hand in ipairs(all_hands) do
       available_hands[i] = hand
     end
     
+    -- Remove the last bet hand from available options if it exists
     if G.LAST_BET_HAND and G.LAST_BET_HAND ~= '' then
       for i = #available_hands, 1, -1 do
         if available_hands[i] == G.LAST_BET_HAND then
@@ -638,6 +658,7 @@ function G.UIDEF.shop()
       end
     end
     
+    -- Select 3 random hands from remaining options
     for i = 1, 3 do
       if #available_hands > 0 then
         local random_index = math.random(#available_hands)
@@ -646,10 +667,12 @@ function G.UIDEF.shop()
       end
     end
     
+    -- If we don't have enough hands (unlikely), fill from all hands
     while #G.CURRENT_SHOP_HANDS < 3 do
       local random_index = math.random(#all_hands)
       local hand = all_hands[random_index]
       
+      -- Make sure we don't add duplicates
       local already_exists = false
       for _, existing_hand in ipairs(G.CURRENT_SHOP_HANDS) do
         if existing_hand == hand then
@@ -679,12 +702,15 @@ function G.UIDEF.shop()
     
     G.SHOP_HANDS_SET = true
     
+    -- Clear G.LAST_BET_HAND after exclusion has been applied
     G.LAST_BET_HAND = ''
   end
 
+  -- ALWAYS set the option list and force index to 1
   G.GAME.option_list = G.CURRENT_SHOP_HANDS
   G.GAME.current_option_index = 1
   
+  -- Force regeneration of option object
   G.GAME.current_option = {option_text = G.GAME.option_list[1]}
 
   local selected_hand = G.GAME.current_option.option_text
@@ -701,8 +727,9 @@ function G.UIDEF.shop()
   }
 
   local max_payout = max_payouts[selected_hand] or 25
+  local ratio = hand_ratios[selected_hand] or 2.5
 
-  G.WIN_AMT_EARNINGS_UI = math.ceil(G.BET_SIZE_UI / G.GAME.current_option3.option_text3)
+  G.WIN_AMT_EARNINGS_UI = math.ceil(G.BET_SIZE_UI / ratio)
   if G.WIN_AMT_EARNINGS_UI > max_payout then
     G.WIN_AMT_EARNINGS_UI = max_payout
   end
