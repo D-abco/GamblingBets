@@ -1,6 +1,6 @@
 --- STEAMODDED HEADER
---- MOD_NAME: DGamblingBetsDEV
---- MOD_ID: DGamblingBetsDEV
+--- MOD_NAME: GamblingBets
+--- MOD_ID: GamblingBets
 --- MOD_AUTHOR: [d_abco]
 --- MOD_DESCRIPTION: Bet any amount of your money on your next hand in the shop.
 --- STEAMODDED HEADER
@@ -21,6 +21,7 @@ G.HAND_BET_SELECTED_UI = ''
 G.WIN_AMT_EARNINGS = 0
 G.WIN_AMT_EARNINGS_UI = 0
 G.BET_SIZE_UI = 5
+G.LAST_BET_HAND = ''  -- Track last bet hand to prevent consecutive appearances
 
 -- UTILITY FUNCTIONS
 
@@ -113,6 +114,7 @@ function resetBettingState()
   G.WIN_AMT_EARNINGS = 0
   G.WIN_AMT_EARNINGS_UI = 0
   G.BET_SIZE_UI = 5
+  G.LAST_BET_HAND = ''
   removeBetFlameDisplay()
 end
 
@@ -318,6 +320,13 @@ G.FUNCS.toggle_shop = function(e)
     G.SHOP_HANDS_SET = false
     G.CURRENT_SHOP_HANDS = nil
     
+    G.GAME.current_option_index = nil
+    G.GAME.current_option = nil
+    G.GAME.current_option2 = nil
+    G.GAME.current_option3 = nil
+    G.GAME.option_list = nil
+    G.GAME.option_list2 = nil
+    
     if G.PAYOUT_CASH and G.SAVED_BLIND < G.GAME.round then
       G.PAYOUT_CASH = false
       G.BET_SIZE = 0
@@ -410,6 +419,7 @@ function G.FUNCS.PLACE_BET()
     play_sound('coin1')
     
     G.HAND_BET_SELECTED = G.GAME.current_option.option_text
+    G.LAST_BET_HAND = G.HAND_BET_SELECTED  
     G.SAVED_BLIND = G.GAME.round
     G.PAYOUT_CASH = true
     initializeBetFlameDisplay()
@@ -504,6 +514,7 @@ function Game:exit()
     G.GAME.p.bets.hand = G.HAND_BET_SELECTED
     G.GAME.p.bets.saved_blind = G.SAVED_BLIND
     G.GAME.p.bets.already_placed = G.BET_ALREADY_PLACED
+    G.GAME.p.bets.last_bet_hand = G.LAST_BET_HAND
   else
     if G.GAME.p and G.GAME.p.bets then
       G.GAME.p.bets.active = false
@@ -523,12 +534,14 @@ function Game:load_game(...)
     G.SAVED_BLIND = G.GAME.p.bets.saved_blind
     G.PAYOUT_CASH = true
     G.BET_ALREADY_PLACED = G.GAME.p.bets.already_placed or true
+    G.LAST_BET_HAND = G.GAME.p.bets.last_bet_hand or ''
     initializeBetFlameDisplay()
   else
     G.PAYOUT_CASH = false
     G.BET_SIZE = 0
     G.HAND_BET_SELECTED = ''
     G.BET_ALREADY_PLACED = false
+    G.LAST_BET_HAND = ''
   end
 end
 
@@ -595,18 +608,17 @@ function G.UIDEF.shop()
   }))
 
   local hand_ratios = {
-    ["Two Pair"] = 2.5,        -- 1:2.5 ratio
-    ["Three of a Kind"] = 2.0,  -- 1:2.5 ratio  
-    ["Straight"] = 1.8,         -- 1:2.78 ratio
-    ["Flush"] = 1.5,           -- 1:3.33 ratio
-    ["Full House"] = 1.3,      -- 1:3.85 ratio
-    ["Four of a Kind"] = 1.1,  -- 1:4.55 ratio
-    ["Straight Flush"] = 1.0   -- 1:5 ratio (best odds)
+    ["Two Pair"] = 2.5,
+    ["Three of a Kind"] = 2.0,
+    ["Straight"] = 1.8,
+    ["Flush"] = 1.5,
+    ["Full House"] = 1.3,
+    ["Four of a Kind"] = 1.1,
+    ["Straight Flush"] = 1.0
   }
 
   local all_hands = {"Two Pair", "Three of a Kind", "Straight", "Flush", "Full House", "Four of a Kind", "Straight Flush"}
 
-  -- Initialize/reset shop hands if needed
   if not G.CURRENT_SHOP_HANDS or not G.SHOP_HANDS_SET then
     math.randomseed(G.GAME.round * 1000 + G.GAME.round_resets.ante * 100)
     
@@ -617,10 +629,38 @@ function G.UIDEF.shop()
       available_hands[i] = hand
     end
     
+    if G.LAST_BET_HAND and G.LAST_BET_HAND ~= '' then
+      for i = #available_hands, 1, -1 do
+        if available_hands[i] == G.LAST_BET_HAND then
+          table.remove(available_hands, i)
+          break
+        end
+      end
+    end
+    
     for i = 1, 3 do
-      local random_index = math.random(#available_hands)
-      table.insert(G.CURRENT_SHOP_HANDS, available_hands[random_index])
-      table.remove(available_hands, random_index)
+      if #available_hands > 0 then
+        local random_index = math.random(#available_hands)
+        table.insert(G.CURRENT_SHOP_HANDS, available_hands[random_index])
+        table.remove(available_hands, random_index)
+      end
+    end
+    
+    while #G.CURRENT_SHOP_HANDS < 3 do
+      local random_index = math.random(#all_hands)
+      local hand = all_hands[random_index]
+      
+      local already_exists = false
+      for _, existing_hand in ipairs(G.CURRENT_SHOP_HANDS) do
+        if existing_hand == hand then
+          already_exists = true
+          break
+        end
+      end
+      
+      if not already_exists then
+        table.insert(G.CURRENT_SHOP_HANDS, hand)
+      end
     end
     
     local hand_difficulty = {
@@ -638,19 +678,17 @@ function G.UIDEF.shop()
     end)
     
     G.SHOP_HANDS_SET = true
+    
+    G.LAST_BET_HAND = ''
   end
 
   G.GAME.option_list = G.CURRENT_SHOP_HANDS
-  G.GAME.current_option_index = G.GAME.current_option_index or 1
+  G.GAME.current_option_index = 1
   
-  if not G.GAME.current_option or not G.GAME.current_option.option_text then
-    G.GAME.current_option = {option_text = G.GAME.option_list[G.GAME.current_option_index]}
-  end
+  G.GAME.current_option = {option_text = G.GAME.option_list[1]}
 
   local selected_hand = G.GAME.current_option.option_text
-  if not G.GAME.current_option3 or not G.GAME.current_option3.option_text3 then
-    G.GAME.current_option3 = {option_text3 = hand_ratios[selected_hand] or 2.5}
-  end
+  G.GAME.current_option3 = {option_text3 = hand_ratios[selected_hand] or 2.5}
 
   local max_payouts = {
     ["Two Pair"] = 25,
@@ -674,13 +712,16 @@ function G.UIDEF.shop()
   G.GAME.option_list2 = {}
   for i, hand in ipairs(G.CURRENT_SHOP_HANDS) do
     local hand_max = max_payouts[hand]
-    G.GAME.option_list2[i] = string.format("Payout: $%d | $%d Max", G.WIN_AMT_EARNINGS_UI, hand_max)
+    local hand_ratio = hand_ratios[hand] or 2.5
+    local hand_payout = math.ceil(G.BET_SIZE_UI / hand_ratio)
+    if hand_payout > hand_max then hand_payout = hand_max end
+    hand_payout = hand_payout + G.BET_SIZE_UI
+    
+    G.GAME.option_list2[i] = string.format("$%d | $%d Max", hand_payout, hand_max)
   end
   
-  G.GAME.current_option_index2 = G.GAME.current_option_index2 or 1
-  if not G.GAME.current_option2 or not G.GAME.current_option2.option_text2 then
-    G.GAME.current_option2 = {option_text2 = G.GAME.option_list2[G.GAME.current_option_index2]}
-  end
+  G.GAME.current_option_index2 = 1
+  G.GAME.current_option2 = {option_text2 = G.GAME.option_list2[1]}
 
   local t = {
     n=G.UIT.ROOT, config = {align = 'cl', colour = G.C.CLEAR}, 
